@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TV Remote Helper</string>
+    <string name="desc">Remaps TCL remote buttons (YouTube to SmartTube, Prime to Spotify, TCL Channel to an app switcher) and force-stops apps you close from the switcher.</string>
+</resources>
