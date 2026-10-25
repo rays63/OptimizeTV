@@ -1,0 +1,16 @@
+# Third-party APKs (large; re-pull from the Google TV or F-Droid, see README)
+nettv/apps/
+
+# Original NetTV firmware files (proprietary; keep a private backup)
+nettv/bootlogo-backup/
+
+# Generated boot animation frames (python render.py)
+nettv/bootlogo/frames/
+
+# Build output
+launcher/build/
+*.apk
+*.idsig
+
+# Signing key for the home screen app (back it up privately)
+*.keystore
