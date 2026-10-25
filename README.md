@@ -4,8 +4,8 @@ Debloat, de-ad and re-skin two Android TV devices over ADB, with a shared custom
 
 | Device | Folder | Address |
 |---|---|---|
-| TCL Google TV (Smart_TV_Pro, Android 12) | [`google-tv/`](google-tv) | `192.168.1.74:5555` |
-| NetTV box (NETTV-1000, Android 10, Allwinner, 32-bit ARM, no Google Play Services) | [`nettv/`](nettv) | `192.168.1.77:<port>` |
+| TCL Google TV (Smart_TV_Pro, Android 12) | [`google-tv/`](google-tv) | `192.168.1.255:5555` |
+| NetTV box (NETTV-1000, Android 10, Allwinner, 32-bit ARM, no Google Play Services) | [`nettv/`](nettv) | `192.168.1.255:<port>` |
 | Home screen app used by both | [`launcher/`](launcher) | — |
 
 Everything is reversible: each `optimize.ps1` has a matching `undo.ps1`.
