@@ -23,17 +23,14 @@ import java.util.Set;
 
 /**
  * TCL remote helper (also used on the NetTV box):
- *  - YouTube button  -> SmartTube (TCL and NetTV remotes)
- *  - Prime button    -> Spotify
- *  - TCL Channel     -> recent-apps switcher, whose Close force-stops apps by
- *                       pressing "Force stop" / "OK" in the app's settings page.
+ *  - YouTube, Prime and TCL Channel buttons -> whatever Settings › Remote buttons says.
+ *    Defaults: SmartTube, Spotify and the recent-apps switcher, whose Close force-stops
+ *    apps by pressing "Force stop" / "OK" in the app's settings page.
  *  - Home button     -> our HomeActivity instead of the Google TV launcher
  *  - Auto-kill: an app left in the background for 5 minutes is killed. Android refuses
  *    to kill anything visible or playing media, so background music keeps going.
  */
 public class RedirectService extends AccessibilityService {
-    private static final String SMARTTUBE = "org.smarttube.stable";
-    private static final String SPOTIFY = "com.spotify.tv.android";
     private static final String TV_SETTINGS = "com.android.tv.settings";
     private static final String GOOGLE_LAUNCHER = "com.google.android.apps.tv.launcherx";
     private static final int KEYCODE_TCL_YOUTUBE = 4065;
@@ -125,23 +122,33 @@ public class RedirectService extends AccessibilityService {
         return false;
     }
 
-    /** TCL remote's app buttons: open our chosen apps, even if the stock apps are uninstalled. */
+    /**
+     * Remote app buttons do what Settings › Remote buttons says: open an app, open the recent-apps
+     * switcher, or keep the TV's own behaviour. A chosen app that's been uninstalled falls back to
+     * the TV's behaviour. Down and up are decided the same way, so the system never gets half a press.
+     */
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        String target;
+        String key;
         switch (event.getKeyCode()) {
             case KEYCODE_TCL_YOUTUBE:
-            case KEYCODE_NETTV_YOUTUBE: target = SMARTTUBE; break;
-            case KEYCODE_TCL_PRIME: target = SPOTIFY; break;
-            case KEYCODE_TCL_CHANNEL:
-                if (event.getAction() == KeyEvent.ACTION_UP) openSwitcher();
-                return true;
+            case KEYCODE_NETTV_YOUTUBE: key = Options.BTN_YOUTUBE; break;
+            case KEYCODE_TCL_PRIME: key = Options.BTN_PRIME; break;
+            case KEYCODE_TCL_CHANNEL: key = Options.BTN_CHANNEL; break;
             case KeyEvent.KEYCODE_HOME:
                 if (event.getAction() == KeyEvent.ACTION_UP) goHome();
                 return true;
             default: return false;
         }
-        if (event.getAction() == KeyEvent.ACTION_UP) launch(target);
+        String target = Options.str(this, key);
+        if (Options.TV_DEFAULT.equals(target)) return false;
+        if (Options.SWITCHER.equals(target)) {
+            if (event.getAction() == KeyEvent.ACTION_UP) openSwitcher();
+            return true;
+        }
+        Intent launch = launchIntent(target);
+        if (launch == null) return false;  // uninstalled: let the TV handle the button
+        if (event.getAction() == KeyEvent.ACTION_UP) startActivity(launch);
         return true;
     }
 
@@ -160,12 +167,11 @@ public class RedirectService extends AccessibilityService {
         startActivity(i);
     }
 
-    private void launch(String pkg) {
+    private Intent launchIntent(String pkg) {
         Intent i = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
         if (i == null) i = getPackageManager().getLaunchIntentForPackage(pkg);
-        if (i == null) return;
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(i);
+        if (i != null) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return i;
     }
 
     // ---- Force stop via the app's settings page, then go Home ----

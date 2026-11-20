@@ -1,25 +1,23 @@
 package tv.local.ytredirect;
 
 import android.app.Activity;
-import android.app.usage.UsageEvents;
-import android.app.usage.UsageStatsManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.text.TextUtils;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.ImageView;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Minimal recent-apps switcher (Google TV has none). Lists recently used apps with
@@ -30,133 +28,131 @@ public class SwitcherActivity extends Activity {
     private static final long WINDOW_MS = 6 * 60 * 60 * 1000L;
     private static final int MAX_APPS = 6;
 
-    private LinearLayout list;
+    private static final int CARD_W = 192, CARD_H = 108;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        root.setBackgroundColor(0xFF0E0E12);
+        build(getIntent().getStringExtra("current"));
+    }
+
+    /**
+     * Overlay over the app you were in: recent apps as cards along the bottom, each with
+     * its own Close button. Focus starts on Close for the app you just left.
+     */
+    private void build(String current) {
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(0x99000000);
+        root.addView(Ui.gradient(this, GradientDrawable.Orientation.BOTTOM_TOP, 0xF2000000, 0x99000000, 0x00000000),
+                new FrameLayout.LayoutParams(-1, dp(420), Gravity.BOTTOM));
 
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(32), dp(24), dp(32), dp(24));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xFF1C1C22);
-        bg.setCornerRadius(dp(20));
-        panel.setBackground(bg);
-        root.addView(panel, new LinearLayout.LayoutParams(dp(640), ViewGroup.LayoutParams.WRAP_CONTENT));
+        panel.setClipChildren(false);
+        panel.setClipToPadding(false);
+        panel.setPadding(0, 0, 0, dp(Ui.SAFE_Y + 12));
+        root.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
         LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("Recent apps");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(26);
-        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button closeAll = button("Close all");
-        header.addView(closeAll);
+        header.setGravity(Gravity.BOTTOM);
+        header.setPadding(dp(Ui.SAFE_X), 0, dp(Ui.SAFE_X), 0);
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.addView(Ui.text(this, "Recent apps", 28, Ui.REGULAR, Ui.INK));
+        TextView help = Ui.text(this, "Select a card to open the app. Close stops it completely.", 15, Ui.REGULAR, Ui.INK_3);
+        help.setPadding(0, dp(8), 0, 0);
+        titles.addView(help);
+        header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
+        Button closeAll = Ui.button(this, "Close all", Ui.GLASS);
+        header.addView(closeAll, new LinearLayout.LayoutParams(-2, dp(40)));
         panel.addView(header);
 
-        list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(0, dp(12), 0, 0);
-        panel.addView(list);
+        HorizontalScrollView scroller = new HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        scroller.setClipToPadding(false);
+        scroller.setClipChildren(false);
+        scroller.setPadding(dp(Ui.SAFE_X), dp(28), dp(Ui.SAFE_X), 0);
+        LinearLayout row = new LinearLayout(this);
+        row.setClipChildren(false);
+        scroller.addView(row);
+        panel.addView(scroller);
 
-        List<String> apps = recentApps(getIntent().getStringExtra("current"));
+        List<String> apps = recentApps(current);
         Button firstClose = null;
         for (String pkg : apps) {
-            Button b = addRow(pkg);
+            Button b = addCard(row, pkg);
             if (firstClose == null) firstClose = b;
         }
         if (apps.isEmpty()) {
-            TextView none = new TextView(this);
-            none.setText("No recent apps");
-            none.setTextColor(0xFFAAAAAA);
-            none.setTextSize(18);
-            list.addView(none);
+            TextView none = Ui.text(this, "Nothing is running. Apps you open will show up here.", 18, Ui.REGULAR, Ui.INK_2);
+            none.setPadding(0, dp(8), 0, dp(40));
+            row.addView(none);
         }
-        closeAll.setOnClickListener(v -> {
-            forceStop(apps);
-        });
+        closeAll.setOnClickListener(v -> forceStop(apps));
         setContentView(root);
-        // Most recent app first, with Close focused: one press closes what you were using.
+        // One press closes what you were just using.
         View initial = firstClose != null ? firstClose : closeAll;
         root.post(initial::requestFocus);
     }
 
-    private Button addRow(String pkg) {
+    private Button addCard(LinearLayout row, String pkg) {
         PackageManager pm = getPackageManager();
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(4), 0, dp(4));
-
-        ImageView icon = new ImageView(this);
-        TextView label = new TextView(this);
+        CharSequence name = pkg;
+        Drawable icon = null, banner = null;
         try {
-            icon.setImageDrawable(pm.getApplicationIcon(pkg));
-            label.setText(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)));
-        } catch (PackageManager.NameNotFoundException e) {
-            label.setText(pkg);
+            name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0));
+            icon = pm.getApplicationIcon(pkg);
+            Intent i = launchIntent(pkg);
+            if (i != null && i.getComponent() != null) banner = pm.getActivityBanner(i.getComponent());
+            if (banner == null) banner = pm.getApplicationBanner(pkg);
+        } catch (PackageManager.NameNotFoundException ignored) {
         }
-        row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        label.setTextColor(Color.WHITE);
-        label.setTextSize(20);
-        label.setPadding(dp(16), 0, 0, 0);
-        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
-        Button open = button("Open");
-        open.setOnClickListener(v -> {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        column.setClipChildren(false);
+
+        FrameLayout card = Ui.card(this, banner, icon, name);
+        card.setFocusable(true);
+        card.setContentDescription("Open " + name);
+        column.addView(card, new LinearLayout.LayoutParams(dp(CARD_W), dp(CARD_H)));
+        TextView label = Ui.text(this, name, 15, Ui.MEDIUM, Ui.INK_2);
+        label.setSingleLine(true);
+        label.setEllipsize(TextUtils.TruncateAt.END);
+        label.setGravity(Gravity.CENTER);
+        label.setPadding(0, dp(16), 0, dp(12));
+        column.addView(label, new LinearLayout.LayoutParams(dp(CARD_W), -2));
+        Button close = Ui.button(this, "Close", Ui.GLASS);
+        close.setContentDescription("Close " + name);
+        column.addView(close, new LinearLayout.LayoutParams(-2, dp(36)));
+
+        card.setOnFocusChangeListener((v, focused) -> {
+            Ui.lift(v, focused, 1.08f);
+            v.setForeground(focused ? Ui.ring(this, Color.WHITE) : null);
+            label.setTextColor(focused ? Ui.INK : Ui.INK_2);
+        });
+        card.setOnClickListener(v -> {
             Intent i = launchIntent(pkg);
             if (i != null) startActivity(i);
             finish();
         });
-        Button close = button("Close");
-        close.setOnClickListener(v -> {
-            forceStop(java.util.Collections.singletonList(pkg));
-        });
-        row.addView(open);
-        row.addView(close);
-        list.addView(row);
+        close.setOnClickListener(v -> forceStop(java.util.Collections.singletonList(pkg)));
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.rightMargin = dp(24);
+        row.addView(column, lp);
         return close;
     }
 
     private List<String> recentApps(String current) {
-        Map<String, Long> last = new LinkedHashMap<>();
-        UsageStatsManager usm = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
-        long now = System.currentTimeMillis();
-        UsageEvents events = usm.queryEvents(now - WINDOW_MS, now);
-        UsageEvents.Event e = new UsageEvents.Event();
-        while (events.hasNextEvent()) {
-            events.getNextEvent(e);
-            if (e.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED) last.put(e.getPackageName(), e.getTimeStamp());
-        }
-        if (current != null) last.put(current, Long.MAX_VALUE);
-        List<Map.Entry<String, Long>> sorted = new ArrayList<>(last.entrySet());
-        sorted.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-
         List<String> out = new ArrayList<>();
-        for (Map.Entry<String, Long> en : sorted) {
-            String pkg = en.getKey();
-            if (pkg.equals(getPackageName()) || RedirectService.PROTECTED.contains(pkg) || isHome(pkg) || launchIntent(pkg) == null) continue;
-            out.add(pkg);
-            if (out.size() == MAX_APPS) break;
-        }
+        for (Recents.Entry e : Recents.query(this, WINDOW_MS, MAX_APPS, current)) out.add(e.pkg);
         return out;
     }
 
-    private boolean isHome(String pkg) {
-        Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(pkg);
-        return !getPackageManager().queryIntentActivities(home, 0).isEmpty();
-    }
-
     private Intent launchIntent(String pkg) {
-        Intent i = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
-        if (i == null) i = getPackageManager().getLaunchIntentForPackage(pkg);
-        if (i != null) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        return i;
+        return Recents.launchIntent(this, pkg);
     }
 
     /** Hand off to the accessibility service, which presses Force stop for each app, then goes Home. */
@@ -170,6 +166,7 @@ public class SwitcherActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (intent.getBooleanExtra("dismiss", false)) finish();
+        else build(intent.getStringExtra("current"));  // reopened: show the current list, not a stale one
     }
 
     @Override
@@ -182,39 +179,6 @@ public class SwitcherActivity extends Activity {
     protected void onPause() {
         super.onPause();
         visible = false;
-    }
-
-    /** Pill button with an obvious focused state (white fill, dark text) for the remote. */
-    private Button button(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setAllCaps(false);
-        b.setTextSize(18);
-        b.setFocusable(true);
-        b.setMinWidth(dp(110));
-        b.setMinHeight(0);
-        b.setMinimumHeight(0);
-        b.setPadding(dp(20), 0, dp(20), 0);
-        b.setStateListAnimator(null);
-        android.graphics.drawable.StateListDrawable bg = new android.graphics.drawable.StateListDrawable();
-        bg.addState(new int[]{android.R.attr.state_focused}, pill(Color.WHITE));
-        bg.addState(new int[]{}, pill(0xFF33333B));
-        b.setBackground(bg);
-        b.setTextColor(new android.content.res.ColorStateList(
-                new int[][]{{android.R.attr.state_focused}, {}},
-                new int[]{0xFF111111, 0xFFDDDDDD}));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
-        lp.leftMargin = dp(10);
-        b.setLayoutParams(lp);
-        return b;
-    }
-
-    private GradientDrawable pill(int color) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(dp(22));
-        return d;
     }
 
     private int dp(int v) {

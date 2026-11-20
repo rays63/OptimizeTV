@@ -23,6 +23,8 @@ Get-Content "$PSScriptRoot\packages-disabled.txt" | Where-Object { $_ } | ForEac
     adb -s $s shell pm disable-user --user 0 $_
 }
 adb -s $s shell cmd package set-home-activity tv.local.ytredirect/.HomeActivity
+# Usage access: the home screen's Continue row and the recent-apps switcher read it
+adb -s $s shell appops set tv.local.ytredirect GET_USAGE_STATS allow
 # Remote helper: the YouTube button (F11) opens SmartTube
 adb -s $s shell settings put secure enabled_accessibility_services tv.local.ytredirect/tv.local.ytredirect.RedirectService
 adb -s $s shell settings put secure accessibility_enabled 1

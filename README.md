@@ -27,14 +27,31 @@ powershell -ExecutionPolicy Bypass -File <path\to\script.ps1>
 
 A tvOS-style launcher written in plain Java, built without Gradle:
 
-- Bing photo of the day as the background (cached for offline use), greeting, clock, date and weather (Open-Meteo)
-- App row using each app's TV banner; hold **OK** on a tile, then **◀ ▶** to move it, then **OK** to finish
-- All apps, Customize (name, city, photo, captions, hidden apps), Next photo, Inputs and Settings shortcuts
+- Bing photo of the day as the background (cached for offline use; **Next photo** steps back through the last 8 days)
+- Big clock with the **Nepali (Bikram Sambat) date** and the English date beside it; numbers can use **Devanagari digits** (११:०६)
+- **Weather chip** (icon, temperature, condition, today's high and low); OK opens a **forecast panel** with today's details, morning to night, and the next 3 days (Open-Meteo)
+- **Favourites** row using each app's TV banner, ending in an **All apps** tile; hold **OK** on a tile, then **◀ ▶** to move it, then **OK** to finish
+- **Home, Apps and Settings tabs** at the top of every screen
+- **Apps** tab: every app as banner tiles; hold **OK** or press **Menu** for Open, Hide/Show on home, App info and Uninstall
+- **Settings** with a live preview of Home:
+
+  | Category | Options |
+  |---|---|
+  | Background | Daily photo or drawn scene, photo location |
+  | Weather | City, temperature (°C/°F), wind speed (km/h, m/s, mph), rainfall (mm, inches), show on home |
+  | Date | Calendar (both, Bikram Sambat, Gregorian), Devanagari digits |
+  | Home screen | Your name, app order, hidden apps |
+  | Icons & tiles | App names: when selected, always or off |
+  | Remote buttons | What the YouTube, Prime Video and TCL Channel buttons open: any app, the recent-apps switcher, or the TV's default |
+  | TV settings | Opens Android's own settings |
+
+- Dark chips stay readable on any photo, everything sits inside the 5% TV-safe area, and shared styling lives in [`Ui.java`](launcher/src/tv/local/ytredirect/Ui.java). No blur (it needs Android 12, and the NetTV box runs 10), so it stays smooth on both devices
+- Layout modelled on [Summit](https://github.com/exendahal/summit_android_tv_launcher) (MIT); the Bikram Sambat table comes from it. See [`launcher/NOTICES.md`](launcher/NOTICES.md)
 - Hides other home-screen apps from the row (on the NetTV box, the stock launcher has to stay enabled in the background)
 - **Remote helper** (an accessibility service, `RedirectService`):
-  - YouTube button → SmartTube (TCL key `4065`, NetTV key `F11`)
-  - TCL Prime button → Spotify
-  - TCL Channel button → recent-apps switcher that can force-stop apps
+  - YouTube button → SmartTube (TCL key `4065`, NetTV key `F11`), changeable in Settings › Remote buttons
+  - TCL Prime button → Spotify, changeable
+  - TCL Channel button → recent-apps switcher, shown over the current app, that can force-stop apps; changeable
   - Home → this launcher instead of Google TV's
   - Apps left in the background for 5 minutes are killed (playing media is left alone)
 
