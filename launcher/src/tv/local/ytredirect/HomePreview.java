@@ -152,7 +152,7 @@ final class HomePreview extends FrameLayout {
             col.setOrientation(LinearLayout.VERTICAL);
             col.setGravity(Gravity.CENTER_HORIZONTAL);
             FrameLayout card = Ui.card(c, ri.activityInfo.loadBanner(pm), ri.loadIcon(pm), ri.loadLabel(pm));
-            if (i == 0) card.setForeground(Ui.ring(c, 0xFFFFFFFF));
+            if (i == 0) card.setForeground(Ui.ring(c, Ui.ACCENT));
             col.addView(card, new LinearLayout.LayoutParams(dp(176), dp(99)));
             TextView label = Ui.onPhoto(c, Ui.text(c, ri.loadLabel(pm), 15, Ui.MEDIUM, Ui.INK));
             label.setSingleLine(true);

@@ -40,6 +40,26 @@ final class Ui {
     static final int SURFACE = 0xFF15161A;      // backdrop when there's no photo
     static final int MOVE = 0xFF4DA3FF;         // tile being moved
     static final int WARN = 0xFFFFC266;         // "Hidden" badge
+    // Selection colour: white, or taken from the photo (Settings › Background). Set by loadAccent().
+    static int ACCENT = 0xFFFFFFFF;             // focused pill, row, chip and tile ring
+    static int ON_ACCENT = INK_DARK;            // text and icons on ACCENT
+    static int ON_ACCENT_2 = 0xB3000000;        // secondary text on ACCENT
+
+    /** Pick the selection colour for this screen; true if it changed. */
+    static boolean loadAccent(Context c) {
+        int accent = 0xFFFFFFFF;
+        if ("photo".equals(Options.str(c, Options.ACCENT))) accent = new DailyWallpaper(c).accent();
+        if (accent == ACCENT) return false;
+        ACCENT = accent;
+        boolean light = luminance(accent) > 0.45;
+        ON_ACCENT = light ? INK_DARK : 0xFFFFFFFF;
+        ON_ACCENT_2 = light ? 0xB3000000 : 0xB3FFFFFF;
+        return true;
+    }
+
+    private static double luminance(int c) {
+        return (0.2126 * Color.red(c) + 0.7152 * Color.green(c) + 0.0722 * Color.blue(c)) / 255;
+    }
 
     // ---- Layout: 5% TV-safe area of a 960x540dp screen ----
     // Not final: sized() divides them by the layout size so the margins stay 5% of the screen.
@@ -56,6 +76,7 @@ final class Ui {
 
     /** Wrap an activity's base context so the whole screen draws at the chosen layout size. */
     static Context sized(Context base) {
+        loadAccent(base);
         float s = sizeScale(base);
         SAFE_X = Math.round(48 / s);
         SAFE_Y = Math.round(28 / s);
@@ -180,7 +201,7 @@ final class Ui {
 
     /** White when focused, otherwise {@code idle}. Children can share it with duplicateParentState. */
     static ColorStateList focusText(int idle) {
-        return new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{INK_DARK, idle});
+        return new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{ON_ACCENT, idle});
     }
 
     /** Pill button: glass when idle, white with dark text when focused. */
@@ -197,7 +218,7 @@ final class Ui {
         b.setMinimumHeight(0);
         b.setPadding(dp(c, 20), 0, dp(c, 20), 0);
         b.setStateListAnimator(null);
-        b.setBackground(focusable(pill(c, INK, 20), pill(c, idleColor, 20)));
+        b.setBackground(focusable(pill(c, ACCENT, 20), pill(c, idleColor, 20)));
         b.setTextColor(focusText(INK_2));
         return b;
     }
@@ -216,7 +237,7 @@ final class Ui {
         b.setStateListAnimator(null);
         b.setTypeface(MEDIUM);
         b.setSingleLine(true);
-        b.setBackground(focusable(pill(c, INK, 22), pill(c, CHIP, 22)));
+        b.setBackground(focusable(pill(c, ACCENT, 22), pill(c, CHIP, 22)));
         b.setTextColor(focusText(INK));
         return b;
     }
@@ -314,12 +335,12 @@ final class Ui {
             b.setStateListAnimator(null);
             b.setSelected(i == current);
             StateListDrawable bg = new StateListDrawable();
-            bg.addState(new int[]{android.R.attr.state_focused}, pill(a, INK, 20));
+            bg.addState(new int[]{android.R.attr.state_focused}, pill(a, ACCENT, 20));
             bg.addState(new int[]{android.R.attr.state_selected}, pill(a, 0x40FFFFFF, 20));
             bg.addState(new int[]{}, pill(a, 0x00000000, 20));
             b.setBackground(bg);
             b.setTextColor(new ColorStateList(new int[][]{{android.R.attr.state_focused},
-                    {android.R.attr.state_selected}, {}}, new int[]{INK_DARK, INK, INK_3}));
+                    {android.R.attr.state_selected}, {}}, new int[]{ON_ACCENT, INK, INK_3}));
             b.setOnClickListener(v -> go(a, current, tab));
             bar.addView(b, new LinearLayout.LayoutParams(-2, dp(a, 40)));
         }

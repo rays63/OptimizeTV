@@ -109,6 +109,7 @@ public class HomeActivity extends Activity {
     };
 
     private float sizeAtCreate;
+    private int accentAtCreate;  // selection colour this screen was built with
 
     @Override
     protected void onCreate(Bundle state) {
@@ -120,6 +121,7 @@ public class HomeActivity extends Activity {
             getWindow().getDecorView().postDelayed(() -> RedirectService.ensureEnabled(this), ms);
         }
         sizeAtCreate = Ui.sizeScale(this);
+        accentAtCreate = Ui.ACCENT;
         prefs = Options.prefs(this);
         wallpaper = new DailyWallpaper(this);
         root = new FrameLayout(this);
@@ -216,9 +218,11 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (Ui.sizeScale(this) != sizeAtCreate) { recreate(); return; }  // layout size changed
+        Ui.loadAccent(this);
+        if (Ui.sizeScale(this) != sizeAtCreate || Ui.ACCENT != accentAtCreate) { recreate(); return; }  // size or colour changed
         RedirectService.ensureEnabled(this);
         Ui.arrangeClock(this, clockRow, clock, clockSide);
+        if (!wallpaper.key().equals(shownPhoto)) { lastWallpaperTry = 0; showWallpaper(false); }  // source changed in Settings
         applyOptions();
         if (moving == null) buildRow();
         handler.post(clockTick);
@@ -332,26 +336,28 @@ public class HomeActivity extends Activity {
         weatherChip.setFocusable(true);
         weatherChip.setClickable(true);
         weatherChip.setPadding(dp(12), 0, dp(18), 0);
-        weatherChip.setBackground(Ui.focusable(Ui.pill(this, Ui.INK, 22), Ui.pill(this, Ui.CHIP, 22)));
+        weatherChip.setBackground(Ui.focusable(Ui.pill(this, Ui.ACCENT, 22), Ui.pill(this, Ui.CHIP, 22)));
         weatherChip.setContentDescription("Weather. Open forecast");
         weatherChip.setOnClickListener(v -> openForecast());
         weatherIcon = new WeatherIcon(this);
-        weatherChip.addView(weatherIcon, new LinearLayout.LayoutParams(dp(22), dp(22)));
         weatherTemp = Ui.text(this, "", 15, Typeface.create("sans-serif", Typeface.BOLD), Ui.INK);
         weatherTemp.setPadding(dp(8), 0, 0, 0);
-        weatherChip.addView(weatherTemp);
         weatherCond = Ui.text(this, Options.str(this, Options.CITY), 15, Ui.REGULAR, Ui.INK);
         weatherCond.setPadding(dp(8), 0, 0, 0);
-        weatherChip.addView(weatherCond);
         weatherHiLo = Ui.text(this, "", 15, Ui.REGULAR, Ui.INK_2);
         weatherHiLo.setPadding(dp(8), 0, 0, 0);
-        weatherChip.addView(weatherHiLo);
-        // Dark text while the chip is focused (white).
+        // Dark text while the chip is focused. The children must copy the chip's focused state
+        // BEFORE they're added: Android only checks that flag in addView (it was set after, so the
+        // text stayed white on the white chip).
         weatherTemp.setTextColor(Ui.focusText(Ui.INK));
         weatherCond.setTextColor(Ui.focusText(Ui.INK));
         weatherHiLo.setTextColor(new android.content.res.ColorStateList(
-                new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0x99000000, Ui.INK_2}));
-        for (View v : new View[]{weatherTemp, weatherCond, weatherHiLo}) v.setDuplicateParentStateEnabled(true);
+                new int[][]{{android.R.attr.state_focused}, {}}, new int[]{Ui.ON_ACCENT_2, Ui.INK_2}));
+        for (View v : new View[]{weatherIcon, weatherTemp, weatherCond, weatherHiLo}) v.setDuplicateParentStateEnabled(true);
+        weatherChip.addView(weatherIcon, new LinearLayout.LayoutParams(dp(22), dp(22)));
+        weatherChip.addView(weatherTemp);
+        weatherChip.addView(weatherCond);
+        weatherChip.addView(weatherHiLo);
         return weatherChip;
     }
 
@@ -517,8 +523,13 @@ public class HomeActivity extends Activity {
 
     // ---- Wallpaper ----
 
+    private String shownPhoto = "";
+
     private void showWallpaper(boolean fade) {
         if (!prefs.getBoolean("photo", true)) return;
+        shownPhoto = wallpaper.key();
+        Ui.loadAccent(this);
+        if (Ui.ACCENT != accentAtCreate) { recreate(); return; }  // new photo, new selection colour
         Bitmap bmp = wallpaper.load(getResources().getDisplayMetrics().widthPixels);
         if (bmp == null) return;
         photo.setImageBitmap(bmp);
@@ -627,7 +638,7 @@ public class HomeActivity extends Activity {
         card.setOnFocusChangeListener((v, focused) -> {
             Ui.lift(v, focused, 1.1f);
             label.animate().alpha(Ui.showName(this, focused) ? 1f : 0f).setDuration(150).start();
-            v.setForeground(focused ? Ui.ring(this, moving == v ? Ui.MOVE : Color.WHITE) : null);
+            v.setForeground(focused ? Ui.ring(this, moving == v ? Ui.MOVE : Ui.ACCENT) : null);
         });
         card.setOnClickListener(v -> {
             try {
@@ -666,7 +677,7 @@ public class HomeActivity extends Activity {
         ((ViewGroup) column).getChildAt(1).setAlpha(0f);  // the tile already says "All apps"
         card.setOnFocusChangeListener((v, focused) -> {
             Ui.lift(v, focused, 1.1f);
-            v.setForeground(focused ? Ui.ring(this, Color.WHITE) : null);
+            v.setForeground(focused ? Ui.ring(this, Ui.ACCENT) : null);
         });
         card.setOnClickListener(v -> startActivity(new Intent(this, AllAppsActivity.class)));
         return column;
@@ -712,7 +723,7 @@ public class HomeActivity extends Activity {
         favHint.setText("   hold OK to move");
         favLabel.setTextColor(Ui.INK_2);
         if (card != null) {
-            card.setForeground(card.hasFocus() ? Ui.ring(this, Color.WHITE) : null);
+            card.setForeground(card.hasFocus() ? Ui.ring(this, Ui.ACCENT) : null);
             Ui.lift(card, card.hasFocus(), 1.1f);
         }
         saveOrder();

@@ -13,12 +13,25 @@ final class WeatherIcon extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int code;
     private boolean day = true;
+    private boolean focused;  // the chip is focused (copied with duplicateParentState): draw in ON_ACCENT
 
     WeatherIcon(Context c) {
         super(c);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        boolean f = false;
+        for (int st : getDrawableState()) if (st == android.R.attr.state_focused) f = true;
+        if (f != focused) { focused = f; invalidate(); }
+    }
+
+    private void color(int c) {
+        paint.setColor(focused ? Ui.ON_ACCENT : c);
     }
 
     void set(int code, boolean day) {
@@ -40,17 +53,17 @@ final class WeatherIcon extends View {
             sun(c, 9, 9, 0.7f);
             cloud(c, 3, CLOUD);
         } else if (code == 45 || code == 48) {
-            paint.setColor(CLOUD);
+            color(CLOUD);
             for (int y = 8; y <= 18; y += 5) c.drawLine(3, y, 21, y, paint);
         } else if ((code >= 71 && code <= 77) || code == 85 || code == 86) {
             cloud(c, -2, CLOUD);
-            paint.setColor(CLOUD);
+            color(CLOUD);
             paint.setStyle(Paint.Style.FILL);
             for (float x = 8; x <= 16; x += 4) c.drawCircle(x, 20, 1.2f, paint);
             paint.setStyle(Paint.Style.STROKE);
         } else if (code >= 95) {
             cloud(c, -2, CLOUD);
-            paint.setColor(SUN);
+            color(SUN);
             Path bolt = new Path();
             bolt.moveTo(13, 15);
             bolt.lineTo(10, 19);
@@ -59,7 +72,7 @@ final class WeatherIcon extends View {
             c.drawPath(bolt, paint);
         } else if (code >= 51) {
             cloud(c, -2, RAIN);
-            paint.setColor(RAIN);
+            color(RAIN);
             for (float x = 8; x <= 16; x += 4) c.drawLine(x, 18, x - 1, 21, paint);
         } else {
             cloud(c, 0, CLOUD);
@@ -68,7 +81,7 @@ final class WeatherIcon extends View {
     }
 
     private void sun(Canvas c, float cx, float cy, float k) {
-        paint.setColor(SUN);
+        color(SUN);
         c.drawCircle(cx, cy, 4 * k, paint);
         for (int i = 0; i < 8; i++) {
             double a = Math.PI / 4 * i;
@@ -78,7 +91,7 @@ final class WeatherIcon extends View {
     }
 
     private void moon(Canvas c) {
-        paint.setColor(0xFFFFF6E0);
+        color(0xFFFFF6E0);
         Path p = new Path();
         p.addArc(new RectF(4, 4, 20, 20), 60, 260);
         p.quadTo(10, 12, 18.5f, 17);
@@ -87,7 +100,7 @@ final class WeatherIcon extends View {
 
     /** Cloud body; dy shifts it up for icons with something underneath. */
     private void cloud(Canvas c, float dy, int color) {
-        paint.setColor(color);
+        color(color);
         Path p = new Path();
         p.moveTo(7, 19 + dy);
         p.lineTo(17.5f, 19 + dy);

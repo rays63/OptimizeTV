@@ -36,7 +36,7 @@ final class LineIcon extends View {
     protected void onDraw(Canvas c) {
         boolean focused = false;
         for (int s : getDrawableState()) if (s == android.R.attr.state_focused) focused = true;
-        paint.setColor(focused ? Ui.INK_DARK : Ui.INK);
+        paint.setColor(focused ? Ui.ON_ACCENT : Ui.INK);
         float s = Math.min(getWidth(), getHeight()) / 24f;
         c.save();
         c.translate((getWidth() - 24 * s) / 2, (getHeight() - 24 * s) / 2);

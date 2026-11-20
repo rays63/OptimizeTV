@@ -15,6 +15,8 @@ final class Options {
     // Background
     static final String PHOTO = "photo";                 // true: daily photo, false: drawn scene
     static final String SHOW_CAPTION = "showCaption";
+    static final String PHOTO_SOURCE = "photoSource";    // bing, nasa, wiki, unsplash
+    static final String ACCENT = "accent";               // photo: selection colour from the photo; white
     // Weather
     static final String CITY = "city";
     static final String TEMP_UNIT = "tempUnit";          // c, f
@@ -62,6 +64,8 @@ final class Options {
             case WIND_UNIT: return "kmh";
             case RAIN_UNIT: return "mm";
             case CALENDAR: return "both";
+            case PHOTO_SOURCE: return "bing";
+            case ACCENT: return "photo";
             case DATE_POS: return "right";
             case PRIMARY_DATE: return "bs";
             case APP_NAMES: return "selected";

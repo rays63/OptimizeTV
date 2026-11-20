@@ -42,6 +42,7 @@ public class AllAppsActivity extends Activity {
     private static final int GAP = 24;
     private int COLS = 5;  // 5 at large, 6 at medium, 7 at small
     private float sizeAtCreate;
+    private int accentAtCreate;
 
     private SharedPreferences prefs;
     private FrameLayout root;
@@ -55,6 +56,7 @@ public class AllAppsActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         sizeAtCreate = Ui.sizeScale(this);
+        accentAtCreate = Ui.ACCENT;
         COLS = Math.round(5 / sizeAtCreate);
         prefs = Options.prefs(this);
         build();
@@ -63,7 +65,8 @@ public class AllAppsActivity extends Activity {
     @Override
     protected void onRestart() {
         super.onRestart();
-        if (Ui.sizeScale(this) != sizeAtCreate) { recreate(); return; }
+        Ui.loadAccent(this);
+        if (Ui.sizeScale(this) != sizeAtCreate || Ui.ACCENT != accentAtCreate) { recreate(); return; }
         build();  // an app may have been uninstalled
     }
 
@@ -161,7 +164,7 @@ public class AllAppsActivity extends Activity {
 
             card.setOnFocusChangeListener((v, focused) -> {
                 Ui.lift(v, focused, 1.08f);
-                v.setForeground(focused ? Ui.ring(this, Color.WHITE) : null);
+                v.setForeground(focused ? Ui.ring(this, Ui.ACCENT) : null);
                 name.setTextColor(focused ? Ui.INK : Ui.INK_2);
                 name.setTypeface(focused ? Ui.MEDIUM : Ui.REGULAR);
                 name.setAlpha(Ui.showName(this, focused) ? 1f : 0f);

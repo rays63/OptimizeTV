@@ -136,7 +136,7 @@ public class SwitcherActivity extends Activity {
 
         card.setOnFocusChangeListener((v, focused) -> {
             Ui.lift(v, focused, 1.08f);
-            v.setForeground(focused ? Ui.ring(this, Color.WHITE) : null);
+            v.setForeground(focused ? Ui.ring(this, Ui.ACCENT) : null);
             label.setTextColor(focused ? Ui.INK : Ui.INK_2);
         });
         card.setOnClickListener(v -> {

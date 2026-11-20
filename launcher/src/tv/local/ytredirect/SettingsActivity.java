@@ -60,6 +60,7 @@ public class SettingsActivity extends Activity {
     private final List<Page> stack = new ArrayList<>();
 
     private float sizeAtCreate;
+    private int accentAtCreate;
 
     private static final class Page {
         final String id;
@@ -91,6 +92,7 @@ public class SettingsActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         sizeAtCreate = Ui.sizeScale(this);
+        accentAtCreate = Ui.ACCENT;
         prefs = Options.prefs(this);
 
         FrameLayout root = Ui.backdrop(this, 0x9E0C0D12);
@@ -161,9 +163,31 @@ public class SettingsActivity extends Activity {
         onBackPressed();
     }
 
+    private boolean accentChanged() {
+        Ui.loadAccent(this);
+        return Ui.ACCENT != accentAtCreate;
+    }
+
+    /** A new photo source was picked: download its photo now, then show it in the preview. */
+    private void fetchPhoto() {
+        toast("Loading the photo\u2026");
+        DailyWallpaper w = new DailyWallpaper(getApplicationContext());
+        new Thread(() -> {
+            boolean ok = w.download();
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (ok && accentChanged()) {  // new photo, new selection colour: rebuild this page
+                    getIntent().putExtra(EXTRA_PAGE, "background");
+                    recreate();
+                } else if (ok) preview.refresh();
+                else toast("Couldn't load that photo. Home will try again later.");
+            });
+        }).start();
+    }
+
     /** A setting changed: redraw this page (values) and the preview. */
     private void changed() {
-        if (Ui.sizeScale(this) != sizeAtCreate) {
+        if (Ui.sizeScale(this) != sizeAtCreate || accentChanged()) {
             getIntent().putExtra(EXTRA_PAGE, stack.get(stack.size() - 1).id);
             recreate();  // a reset brought the layout size back
             return;
@@ -205,7 +229,11 @@ public class SettingsActivity extends Activity {
             case "background":
                 title = "Background";
                 rows.add(choice("Background", Options.PHOTO, null, new String[]{"Daily photo", "Drawn scene"}));
-                rows.add(choice("Photo location", Options.SHOW_CAPTION, null, new String[]{"Shown", "Hidden"}));
+                rows.add(choice("Photo of the day from", Options.PHOTO_SOURCE, new String[]{"bing", "nasa", "wiki", "unsplash"},
+                        new String[]{"Bing", "NASA Image of the Day", "Wikimedia Commons", "Unsplash"}));
+                rows.add(choice("Photo caption", Options.SHOW_CAPTION, null, new String[]{"Shown", "Hidden"}));
+                rows.add(choice("Selection colour", Options.ACCENT, new String[]{"photo", "white"},
+                        new String[]{"From the photo", "White"}));
                 break;
             case "weather":
                 title = "Weather";
@@ -361,8 +389,9 @@ public class SettingsActivity extends Activity {
             rows.add(new Row(labels[i], "", -1, i == current ? LineIcon.CHECK : -1, () -> {
                 if (values == null) prefs.edit().putBoolean(key, pick == 0).apply();
                 else prefs.edit().putString(key, values[pick]).apply();
-                if (Options.LAYOUT_SIZE.equals(key)) {  // every dp changes: rebuild on the same page
-                    getIntent().putExtra(EXTRA_PAGE, "tiles");
+                if (Options.PHOTO_SOURCE.equals(key)) fetchPhoto();
+                if (Options.LAYOUT_SIZE.equals(key) || (Options.ACCENT.equals(key) && accentChanged())) {  // every dp changes: rebuild on the same page
+                    getIntent().putExtra(EXTRA_PAGE, Options.ACCENT.equals(key) ? "background" : "tiles");
                     recreate();
                     return;
                 }
@@ -426,7 +455,7 @@ public class SettingsActivity extends Activity {
     private void resetCategory(String id) {
         SharedPreferences.Editor e = prefs.edit();
         switch (id) {
-            case "background": e.remove(Options.PHOTO).remove(Options.SHOW_CAPTION); break;
+            case "background": e.remove(Options.PHOTO).remove(Options.PHOTO_SOURCE).remove(Options.SHOW_CAPTION).remove(Options.ACCENT); break;
             case "weather":
                 e.remove(Options.CITY).remove("lat").remove("lon").remove(Options.TEMP_UNIT)
                         .remove(Options.WIND_UNIT).remove(Options.RAIN_UNIT).remove(Options.SHOW_WEATHER);
@@ -455,7 +484,7 @@ public class SettingsActivity extends Activity {
         row.setFocusable(true);
         row.setClickable(true);
         row.setPadding(dp(20), 0, dp(16), 0);
-        row.setBackground(Ui.focusable(Ui.pill(this, Ui.INK, 12), Ui.pill(this, 0x00000000, 12)));
+        row.setBackground(Ui.focusable(Ui.pill(this, Ui.ACCENT, 12), Ui.pill(this, 0x00000000, 12)));
         if (r.icon >= 0) {
             row.addView(new LineIcon(this, r.icon), new LinearLayout.LayoutParams(dp(24), dp(24)));
         } else if (compact && r.label.equals("Weather")) {
@@ -475,7 +504,7 @@ public class SettingsActivity extends Activity {
         if (!r.value.isEmpty()) {
             TextView v = Ui.text(this, r.value, 14, Ui.REGULAR, Ui.INK_2);
             v.setTextColor(new android.content.res.ColorStateList(
-                    new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xB3000000, Ui.INK_2}));
+                    new int[][]{{android.R.attr.state_focused}, {}}, new int[]{Ui.ON_ACCENT_2, Ui.INK_2}));
             v.setDuplicateParentStateEnabled(true);
             v.setPadding(0, dp(5), 0, 0);
             texts.addView(v);
