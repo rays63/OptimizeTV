@@ -1,5 +1,7 @@
 package tv.local.ytredirect;
 
+import android.content.Context;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -24,6 +26,11 @@ import java.util.List;
  * Open / Close; Close force-stops via {@link RedirectService}.
  */
 public class SwitcherActivity extends Activity {
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.sized(base));
+    }
+
     static boolean visible;
     private static final long WINDOW_MS = 6 * 60 * 60 * 1000L;
     private static final int MAX_APPS = 6;

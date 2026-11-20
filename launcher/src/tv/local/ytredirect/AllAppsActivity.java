@@ -1,5 +1,7 @@
 package tv.local.ytredirect;
 
+import android.content.Context;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -31,8 +33,15 @@ import java.util.Set;
  * hide or show the app on the home row, see its info, or uninstall it.
  */
 public class AllAppsActivity extends Activity {
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.sized(base));
+    }
+
     static final String HIDDEN = "hidden";
-    private static final int COLS = 5, GAP = 24;
+    private static final int GAP = 24;
+    private int COLS = 5;  // 5 at large, 6 at medium, 7 at small
+    private float sizeAtCreate;
 
     private SharedPreferences prefs;
     private FrameLayout root;
@@ -45,6 +54,8 @@ public class AllAppsActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        sizeAtCreate = Ui.sizeScale(this);
+        COLS = Math.round(5 / sizeAtCreate);
         prefs = Options.prefs(this);
         build();
     }
@@ -52,6 +63,7 @@ public class AllAppsActivity extends Activity {
     @Override
     protected void onRestart() {
         super.onRestart();
+        if (Ui.sizeScale(this) != sizeAtCreate) { recreate(); return; }
         build();  // an app may have been uninstalled
     }
 
@@ -85,6 +97,7 @@ public class AllAppsActivity extends Activity {
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setClipChildren(false);
+        content.setClipToPadding(false);  // a focused first-column tile grows into the safe margin
         content.setPadding(dp(Ui.SAFE_X), dp(Ui.SAFE_Y), dp(Ui.SAFE_X), 0);
         root.addView(content, new FrameLayout.LayoutParams(-1, -1));
 

@@ -27,10 +27,54 @@ import java.util.Set;
  *    Defaults: SmartTube, Spotify and the recent-apps switcher, whose Close force-stops
  *    apps by pressing "Force stop" / "OK" in the app's settings page.
  *  - Home button     -> our HomeActivity instead of the Google TV launcher
- *  - Auto-kill: an app left in the background for 5 minutes is killed. Android refuses
- *    to kill anything visible or playing media, so background music keeps going.
+ *  - Auto-close: an app not used for 10 minutes is closed. Every 2 minutes a sweep reads the
+ *    usage history (so it also catches apps from before a reboot, or that started themselves)
+ *    and kills their background processes. That can't touch apps holding a foreground service
+ *    (Stremio's server, a paused Spotify), and apps can't see which other apps are running, so
+ *    at most every 30 minutes the idle apps are also force-stopped through their settings pages
+ *    (a greyed-out Force stop means not running: skipped). Only while Home is showing, nothing
+ *    is playing and the remote has been idle for 2 minutes; any key press cuts it short.
  */
 public class RedirectService extends AccessibilityService {
+    /**
+     * Turn this service back on if something switched it off (the TCL resets accessibility_enabled
+     * on reboot). Needs WRITE_SECURE_SETTINGS, granted over adb; without it this does nothing.
+     */
+    static void ensureEnabled(android.content.Context c) {
+        if (c.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        android.content.ContentResolver r = c.getContentResolver();
+        String me = c.getPackageName() + "/" + RedirectService.class.getName();
+        try {
+            // Already running? Then leave the settings alone.
+            android.view.accessibility.AccessibilityManager am =
+                    (android.view.accessibility.AccessibilityManager) c.getSystemService(ACCESSIBILITY_SERVICE);
+            for (android.accessibilityservice.AccessibilityServiceInfo i : am.getEnabledAccessibilityServiceList(
+                    android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)) {
+                if (me.equals(i.getId())) return;
+            }
+            String list = android.provider.Settings.Secure.getString(r, "enabled_accessibility_services");
+            String others = list == null ? "" : (":" + list + ":").replace(":" + me + ":", ":").replaceAll("^:+|:+$", "");
+            android.provider.Settings.Secure.putInt(r, "accessibility_enabled", 1);
+            // Android only (re)binds services when this list changes, so write it without us, then with us.
+            android.provider.Settings.Secure.putString(r, "enabled_accessibility_services", others);
+            android.provider.Settings.Secure.putString(r, "enabled_accessibility_services",
+                    others.isEmpty() ? me : others + ":" + me);
+            // After a reboot the TCL's accessibility manager ignores settings changes and only
+            // re-reads them on a package change: flip our own hidden component to cause one.
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            android.content.ComponentName nudge = new android.content.ComponentName(c, c.getPackageName() + ".Nudge");
+            int now = pm.getComponentEnabledSetting(nudge);
+            pm.setComponentEnabledSetting(nudge,
+                    now == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                            ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+                            : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP);
+        } catch (RuntimeException e) {
+            android.util.Log.w("RedirectService", "could not re-enable the remote helper", e);
+        }
+    }
+
     private static final String TV_SETTINGS = "com.android.tv.settings";
     private static final String GOOGLE_LAUNCHER = "com.google.android.apps.tv.launcherx";
     private static final int KEYCODE_TCL_YOUTUBE = 4065;
@@ -38,7 +82,16 @@ public class RedirectService extends AccessibilityService {
     private static final int KEYCODE_TCL_CHANNEL = 4020;
     /** NetTV box remote's YouTube button. */
     private static final int KEYCODE_NETTV_YOUTUBE = KeyEvent.KEYCODE_F11;
-    private static final long BACKGROUND_KILL_MS = 5 * 60_000;
+    private static final long BACKGROUND_KILL_MS = 10 * 60_000;
+    private static final long SWEEP_MS = 2 * 60_000;
+    private static final long REMOTE_IDLE_MS = 2 * 60_000;
+    /** Never force-stopped: interrupting these breaks app updates and Google services. */
+    private static final Set<String> NEVER_FORCE_STOP = new HashSet<>(Arrays.asList(
+            "com.android.vending", "com.google.android.gms", "com.google.android.katniss"));
+    private static final long FORCE_PASS_MS = 30 * 60_000;
+    private static final boolean FORCE_PASS_ON = false;  // off until tested on the TV
+    private long lastKeyAt, lastForcePass;
+    private boolean autoPass;  // the current force-stop run is the idle sweep's, not the switcher's
     /** System apps that should never be killed or offered in the switcher. */
     static final Set<String> PROTECTED = new HashSet<>(Arrays.asList(
             "com.tcl.tv", TV_SETTINGS, "com.android.systemui"));
@@ -58,6 +111,64 @@ public class RedirectService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         instance = this;
+        handler.removeCallbacks(sweep);
+        handler.postDelayed(sweep, SWEEP_MS);
+    }
+
+    /** Close apps that haven't been used for BACKGROUND_KILL_MS (see the class comment). */
+    private final Runnable sweep = new Runnable() {
+        @Override
+        public void run() {
+            handler.postDelayed(this, SWEEP_MS);
+            try {
+                closeIdleApps();
+            } catch (RuntimeException e) {
+                android.util.Log.w("RedirectService", "sweep failed", e);
+            }
+        }
+    };
+
+    private void closeIdleApps() {
+        if (stopping != null) return;
+        long now = System.currentTimeMillis();
+        android.app.usage.UsageStatsManager usm =
+                (android.app.usage.UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+        Map<String, Long> lastUsed = new HashMap<>();
+        android.app.usage.UsageEvents events = usm.queryEvents(now - 24 * 3_600_000L, now);
+        android.app.usage.UsageEvents.Event e = new android.app.usage.UsageEvents.Event();
+        while (events.hasNextEvent()) {
+            events.getNextEvent(e);
+            String pkg = e.getPackageName();
+            switch (e.getEventType()) {
+                case android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED:
+                case android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED:
+                    lastUsed.put(pkg, e.getTimeStamp());
+                    break;
+                default: break;
+            }
+        }
+        // What's on screen now (fgPkg can be stale: at boot Home appears before this service starts).
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        String onScreen = root != null && root.getPackageName() != null ? root.getPackageName().toString() : fgPkg;
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        List<String> stubborn = new java.util.ArrayList<>();
+        for (android.content.pm.ApplicationInfo app : getPackageManager().getInstalledApplications(0)) {
+            String pkg = app.packageName;
+            if (pkg.equals(onScreen) || pkg.equals(fgPkg) || pkg.equals(getPackageName()) || !isKillable(pkg)) continue;
+            Long used = lastUsed.get(pkg);
+            if (used != null && now - used < BACKGROUND_KILL_MS) continue;
+            am.killBackgroundProcesses(pkg);  // no-op if it isn't running
+            if (!NEVER_FORCE_STOP.contains(pkg)) stubborn.add(pkg);
+        }
+        // Force stop needs TV Settings on screen for a moment: only while nobody is using the TV.
+        android.media.AudioManager audio = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+        boolean idleOnHome = getPackageName().equals(onScreen) && now - lastKeyAt > REMOTE_IDLE_MS;
+        if (FORCE_PASS_ON && !stubborn.isEmpty() && idleOnHome && !audio.isMusicActive() && now - lastForcePass > FORCE_PASS_MS) {
+            lastForcePass = now;
+            autoPass = true;
+            android.util.Log.i("RedirectService", "force-stopping idle apps " + stubborn);
+            forceStop(stubborn);
+        }
     }
 
     @Override
@@ -129,6 +240,8 @@ public class RedirectService extends AccessibilityService {
      */
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        lastKeyAt = System.currentTimeMillis();
+        if (autoPass && stopping != null) stopQueue.clear();  // someone's using the TV: stop after this app
         String key;
         switch (event.getKeyCode()) {
             case KEYCODE_TCL_YOUTUBE:
@@ -184,6 +297,7 @@ public class RedirectService extends AccessibilityService {
     private void nextStop() {
         stopping = stopQueue.poll();
         if (stopping == null) {
+            autoPass = false;
             performGlobalAction(GLOBAL_ACTION_HOME);
             return;
         }

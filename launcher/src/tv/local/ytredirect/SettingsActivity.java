@@ -1,5 +1,7 @@
 package tv.local.ytredirect;
 
+import android.content.Context;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -42,6 +44,11 @@ import java.util.function.Consumer;
  * live preview of Home on the right. Changes apply as soon as they're made.
  */
 public class SettingsActivity extends Activity {
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.sized(base));
+    }
+
     /** Open straight to a category: "weather", "date", ... */
     static final String EXTRA_PAGE = "page";
 
@@ -51,6 +58,8 @@ public class SettingsActivity extends Activity {
     private HomePreview preview;
     /** Open pages, the category list first; each remembers which row was focused. */
     private final List<Page> stack = new ArrayList<>();
+
+    private float sizeAtCreate;
 
     private static final class Page {
         final String id;
@@ -81,6 +90,7 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        sizeAtCreate = Ui.sizeScale(this);
         prefs = Options.prefs(this);
 
         FrameLayout root = Ui.backdrop(this, 0x9E0C0D12);
@@ -153,6 +163,11 @@ public class SettingsActivity extends Activity {
 
     /** A setting changed: redraw this page (values) and the preview. */
     private void changed() {
+        if (Ui.sizeScale(this) != sizeAtCreate) {
+            getIntent().putExtra(EXTRA_PAGE, stack.get(stack.size() - 1).id);
+            recreate();  // a reset brought the layout size back
+            return;
+        }
         stack.get(stack.size() - 1).focus = focusedIndex();
         render();
         preview.refresh();
@@ -206,6 +221,10 @@ public class SettingsActivity extends Activity {
                 rows.add(choice("Calendar", Options.CALENDAR, new String[]{"both", "bs", "ad"},
                         new String[]{"Both (Bikram Sambat and Gregorian)", "Bikram Sambat", "Gregorian"}));
                 rows.add(choice("Devanagari digits", Options.DIGITS, null, new String[]{"On: clock, dates and weather", "Off"}));
+                rows.add(choice("Primary date", Options.PRIMARY_DATE, new String[]{"bs", "ad"},
+                        new String[]{"Bikram Sambat (big and bold)", "Gregorian (big and bold)"}));
+                rows.add(choice("Greeting & dates", Options.DATE_POS, new String[]{"right", "above", "below"},
+                        new String[]{"Right of the clock", "Above the clock", "Below the clock"}));
                 break;
             case "home": {
                 title = "Home screen";
@@ -236,6 +255,8 @@ public class SettingsActivity extends Activity {
             }
             case "tiles":
                 title = "Icons & tiles";
+                rows.add(choice("Layout size", Options.LAYOUT_SIZE, new String[]{"large", "medium", "small"},
+                        new String[]{"Large", "Medium", "Small"}));
                 rows.add(choice("App names", Options.APP_NAMES, new String[]{"selected", "always", "off"},
                         new String[]{"When selected", "Always", "Off"}));
                 break;
@@ -291,7 +312,8 @@ public class SettingsActivity extends Activity {
         View f = list.getChildAt(target);
         if (f != null) {
             f.requestFocus();
-            listScroll.post(() -> listScroll.requestChildFocus(f, f));
+            // Scroll it into view once laid out. (Calling requestChildFocus by hand broke the focus chain.)
+            f.post(() -> f.requestRectangleOnScreen(new android.graphics.Rect(0, 0, f.getWidth(), f.getHeight()), true));
         }
     }
 
@@ -339,6 +361,11 @@ public class SettingsActivity extends Activity {
             rows.add(new Row(labels[i], "", -1, i == current ? LineIcon.CHECK : -1, () -> {
                 if (values == null) prefs.edit().putBoolean(key, pick == 0).apply();
                 else prefs.edit().putString(key, values[pick]).apply();
+                if (Options.LAYOUT_SIZE.equals(key)) {  // every dp changes: rebuild on the same page
+                    getIntent().putExtra(EXTRA_PAGE, "tiles");
+                    recreate();
+                    return;
+                }
                 preview.refresh();
                 back();
             }));
@@ -404,9 +431,9 @@ public class SettingsActivity extends Activity {
                 e.remove(Options.CITY).remove("lat").remove("lon").remove(Options.TEMP_UNIT)
                         .remove(Options.WIND_UNIT).remove(Options.RAIN_UNIT).remove(Options.SHOW_WEATHER);
                 break;
-            case "date": e.remove(Options.CALENDAR).remove(Options.DIGITS); break;
+            case "date": e.remove(Options.CALENDAR).remove(Options.DIGITS).remove(Options.DATE_POS).remove(Options.PRIMARY_DATE); break;
             case "home": e.remove(Options.NAME).remove(Options.ORDER).remove(AllAppsActivity.HIDDEN); break;
-            case "tiles": e.remove(Options.APP_NAMES); break;
+            case "tiles": e.remove(Options.APP_NAMES).remove(Options.LAYOUT_SIZE); break;
             case "remote": e.remove(Options.BTN_YOUTUBE).remove(Options.BTN_PRIME).remove(Options.BTN_CHANNEL); break;
             default: break;
         }

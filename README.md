@@ -52,7 +52,7 @@ A tvOS-style launcher written in plain Java, built without Gradle:
   - YouTube button → SmartTube (TCL key `4065`, NetTV key `F11`), changeable in Settings › Remote buttons
   - TCL Prime button → Spotify, changeable
   - TCL Channel button → recent-apps switcher, shown over the current app, that can force-stop apps; changeable
-  - Home → this launcher instead of Google TV's
+  - Home → this launcher instead of Google TV's (on the TCL, `optimize.ps1` also disables Google TV's launcher so this one is the real home app, and Home switches the helper back on after a reboot)
   - Apps left in the background for 5 minutes are killed (playing media is left alone)
 
 Build:

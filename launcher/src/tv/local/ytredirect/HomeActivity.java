@@ -1,5 +1,7 @@
 package tv.local.ytredirect;
 
+import android.content.Context;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -42,6 +44,11 @@ import java.util.Locale;
  * app to move it; the order is remembered. Layout modelled on Summit (see NOTICES.md).
  */
 public class HomeActivity extends Activity {
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.sized(base));
+    }
+
     static final String DEFAULT_NAME = "Ray";
     static final String DEFAULT_CITY = "Kathmandu";
     static final float DEFAULT_LAT = 27.7172f, DEFAULT_LON = 85.3240f;
@@ -62,6 +69,7 @@ public class HomeActivity extends Activity {
     private ImageView photo;
     private FrameLayout root;
     private LinearLayout page;
+    private LinearLayout clockRow, clockSide;  // re-arranged when the date position changes
     private TextView clock, greeting, bsDate, adDate, caption, favLabel, favHint;
     private LinearLayout weatherChip;
     private WeatherIcon weatherIcon;
@@ -100,9 +108,18 @@ public class HomeActivity extends Activity {
         }
     };
 
+    private float sizeAtCreate;
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        // The remote helper is switched off at boot (TCL's player app runs a TalkBack check right after
+        // we start), so check now, again a little later, and on every return to Home (onResume).
+        RedirectService.ensureEnabled(this);
+        for (long ms : new long[]{15_000, 45_000}) {
+            getWindow().getDecorView().postDelayed(() -> RedirectService.ensureEnabled(this), ms);
+        }
+        sizeAtCreate = Ui.sizeScale(this);
         prefs = Options.prefs(this);
         wallpaper = new DailyWallpaper(this);
         root = new FrameLayout(this);
@@ -139,19 +156,15 @@ public class HomeActivity extends Activity {
         clockRow.setPadding(dp(Ui.SAFE_X - 4), dp(4), dp(Ui.SAFE_X), 0);
         clock = Ui.onPhoto(this, Ui.text(this, "", 112, Typeface.create("sans-serif-thin", Typeface.NORMAL), Ui.INK));
         clock.setLetterSpacing(-0.02f);
-        clockRow.addView(clock);
-        LinearLayout side = new LinearLayout(this);
+        clockSide = new LinearLayout(this);
+        LinearLayout side = clockSide;
         side.setOrientation(LinearLayout.VERTICAL);
-        side.setPadding(dp(28), dp(4), 0, 0);
-        greeting = Ui.onPhoto(this, Ui.text(this, "", 20, Ui.LIGHT, Ui.INK_2));
-        side.addView(greeting);
+        greeting = Ui.onPhoto(this, Ui.text(this, "", 24, Ui.MEDIUM, Ui.INK));
         bsDate = Ui.onPhoto(this, Ui.text(this, "", 24, Ui.MEDIUM, Ui.INK));
-        bsDate.setPadding(0, dp(8), 0, 0);
-        side.addView(bsDate);
         adDate = Ui.onPhoto(this, Ui.text(this, "", 15, Ui.REGULAR, Ui.INK_2));
-        adDate.setPadding(0, dp(7), 0, 0);
-        side.addView(adDate);
-        clockRow.addView(side);
+        Ui.layoutDates(this, side, greeting, bsDate, adDate);  // styled and ordered again in applyOptions
+        this.clockRow = clockRow;
+        Ui.arrangeClock(this, clockRow, clock, side);
         page.addView(clockRow);
 
         // Favourites sit at the bottom, with the photo showing in between.
@@ -203,6 +216,9 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (Ui.sizeScale(this) != sizeAtCreate) { recreate(); return; }  // layout size changed
+        RedirectService.ensureEnabled(this);
+        Ui.arrangeClock(this, clockRow, clock, clockSide);
         applyOptions();
         if (moving == null) buildRow();
         handler.post(clockTick);
@@ -253,9 +269,7 @@ public class HomeActivity extends Activity {
         boolean showAd = !"bs".equals(cal) || bs == null;
         adDate.setText(Options.digits(this, new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(now)));
         adDate.setVisibility(showAd ? View.VISIBLE : View.GONE);
-        // Without the Nepali line, the English date takes its size.
-        adDate.setTextSize(bs == null ? 22 : 15);
-        adDate.setTextColor(bs == null ? Ui.INK : Ui.INK_2);
+        Ui.layoutDates(this, clockSide, greeting, bsDate, adDate);  // primary date big and first
     }
 
     private String greetingText() {

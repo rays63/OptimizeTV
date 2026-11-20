@@ -24,11 +24,14 @@ final class Options {
     // Date
     static final String CALENDAR = "calendar";           // both, bs, ad
     static final String DIGITS = "digits";               // true: Devanagari digits
+    static final String PRIMARY_DATE = "primaryDate";    // bs, ad: which date is big and bold
+    static final String DATE_POS = "datePos";            // right, above, below (greeting and dates vs the clock)
     // Home screen
     static final String NAME = "name";
     static final String ORDER = "order";
     // Icons & tiles
     static final String APP_NAMES = "appNames";          // selected, always, off
+    static final String LAYOUT_SIZE = "layoutSize";      // large, medium, small
     // Remote buttons: a package name, SWITCHER or TV_DEFAULT
     static final String BTN_YOUTUBE = "btnYoutube";
     static final String BTN_PRIME = "btnPrime";
@@ -59,7 +62,10 @@ final class Options {
             case WIND_UNIT: return "kmh";
             case RAIN_UNIT: return "mm";
             case CALENDAR: return "both";
+            case DATE_POS: return "right";
+            case PRIMARY_DATE: return "bs";
             case APP_NAMES: return "selected";
+            case LAYOUT_SIZE: return "large";
             case BTN_YOUTUBE: return SMARTTUBE;
             case BTN_PRIME: return SPOTIFY;
             case BTN_CHANNEL: return SWITCHER;

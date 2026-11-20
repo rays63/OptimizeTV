@@ -42,7 +42,32 @@ final class Ui {
     static final int WARN = 0xFFFFC266;         // "Hidden" badge
 
     // ---- Layout: 5% TV-safe area of a 960x540dp screen ----
-    static final int SAFE_X = 48, SAFE_Y = 28;
+    // Not final: sized() divides them by the layout size so the margins stay 5% of the screen.
+    static int SAFE_X = 48, SAFE_Y = 28;
+
+    /** Layout size setting as a factor on every dp and sp: large is the original design. */
+    static float sizeScale(Context c) {
+        switch (Options.str(c, Options.LAYOUT_SIZE)) {
+            case "small": return 0.72f;
+            case "medium": return 0.85f;
+            default: return 1f;
+        }
+    }
+
+    /** Wrap an activity's base context so the whole screen draws at the chosen layout size. */
+    static Context sized(Context base) {
+        float s = sizeScale(base);
+        SAFE_X = Math.round(48 / s);
+        SAFE_Y = Math.round(28 / s);
+        if (s == 1f) return base;
+        android.content.res.Configuration cfg =
+                new android.content.res.Configuration(base.getResources().getConfiguration());
+        cfg.densityDpi = Math.round(cfg.densityDpi * s);
+        cfg.screenWidthDp = Math.round(cfg.screenWidthDp / s);
+        cfg.screenHeightDp = Math.round(cfg.screenHeightDp / s);
+        cfg.smallestScreenWidthDp = Math.round(cfg.smallestScreenWidthDp / s);
+        return base.createConfigurationContext(cfg);
+    }
     static final int TILE_RADIUS = 12;
 
     // ---- Type (Roboto, three weights) ----
@@ -57,6 +82,56 @@ final class Ui {
     static int screenWidthDp(Context c) {
         android.util.DisplayMetrics m = c.getResources().getDisplayMetrics();
         return Math.round(m.widthPixels / m.density);
+    }
+
+    /**
+     * Fill the column beside the clock: the greeting (bold, same size as the primary date), then the
+     * primary date big and bold, then the other date small. A hidden (GONE) date is never primary.
+     */
+    static void layoutDates(Context c, LinearLayout side, TextView greeting, TextView bs, TextView ad) {
+        side.removeAllViews();
+        greeting.setTextSize(24);
+        greeting.setTypeface(MEDIUM);
+        greeting.setTextColor(INK);
+        side.addView(greeting);
+        boolean adFirst = bs.getVisibility() == View.GONE
+                || (ad.getVisibility() != View.GONE && "ad".equals(Options.str(c, Options.PRIMARY_DATE)));
+        TextView primary = adFirst ? ad : bs, other = adFirst ? bs : ad;
+        primary.setTextSize(24);
+        primary.setTypeface(MEDIUM);
+        primary.setTextColor(INK);
+        primary.setPadding(0, dp(c, 8), 0, 0);
+        other.setTextSize(15);
+        other.setTypeface(REGULAR);
+        other.setTextColor(INK_2);
+        other.setPadding(0, dp(c, 7), 0, 0);
+        side.addView(primary);
+        side.addView(other);
+    }
+
+    /** Put the greeting and dates (side) right of, above or below the clock, per Settings. */
+    static void arrangeClock(Context c, LinearLayout row, View clock, LinearLayout side) {
+        row.removeAllViews();
+        String pos = Options.str(c, Options.DATE_POS);
+        if ("above".equals(pos) || "below".equals(pos)) {
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setGravity(Gravity.START);
+            boolean above = "above".equals(pos);
+            side.setPadding(dp(c, 4), above ? dp(c, 16) : dp(c, 6), 0, above ? dp(c, 10) : 0);
+            row.addView(above ? side : clock);
+            row.addView(above ? clock : side);
+        } else {
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            side.setPadding(dp(c, 28), dp(c, 4), 0, 0);
+            row.addView(clock);
+            row.addView(side);
+        }
+    }
+
+    static int screenHeightDp(Context c) {
+        android.util.DisplayMetrics m = c.getResources().getDisplayMetrics();
+        return Math.round(m.heightPixels / m.density);
     }
 
     static TextView text(Context c, CharSequence s, float sp, Typeface tf, int color) {

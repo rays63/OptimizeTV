@@ -28,11 +28,14 @@ import java.util.Locale;
  * It can't take focus, and it decodes the photo small to stay light on the NetTV box.
  */
 final class HomePreview extends FrameLayout {
-    private static final int W = 960, H = 540, PREVIEW_TILES = 5;
+    private final int W, H, PREVIEW_TILES;  // screen in dp at the chosen layout size
     private final FrameLayout screen;
 
     HomePreview(Context c) {
         super(c);
+        W = Ui.screenWidthDp(c);
+        H = Ui.screenHeightDp(c);
+        PREVIEW_TILES = (int) Math.ceil(5 / Ui.sizeScale(c));
         setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         setFocusable(false);
         setClipToOutline(true);
@@ -110,26 +113,20 @@ final class HomePreview extends FrameLayout {
         clockRow.setGravity(Gravity.CENTER_VERTICAL);
         clockRow.setPadding(dp(Ui.SAFE_X - 4), dp(4), 0, 0);
         String pattern = DateFormat.is24HourFormat(c) ? "HH:mm" : "h:mm";
-        clockRow.addView(Ui.onPhoto(c, Ui.text(c, Options.digits(c, new SimpleDateFormat(pattern, Locale.ENGLISH).format(now)),
-                112, Typeface.create("sans-serif-thin", Typeface.NORMAL), Ui.INK)));
+        View clock = Ui.onPhoto(c, Ui.text(c, Options.digits(c, new SimpleDateFormat(pattern, Locale.ENGLISH).format(now)),
+                112, Typeface.create("sans-serif-thin", Typeface.NORMAL), Ui.INK));
         LinearLayout side = new LinearLayout(c);
         side.setOrientation(LinearLayout.VERTICAL);
-        side.setPadding(dp(28), 0, 0, 0);
-        side.addView(Ui.onPhoto(c, Ui.text(c, HomeActivity.greeting(c), 20, Ui.LIGHT, Ui.INK_2)));
+        TextView greeting = Ui.onPhoto(c, Ui.text(c, HomeActivity.greeting(c), 24, Ui.MEDIUM, Ui.INK));
         String cal = Options.str(c, Options.CALENDAR);
         String bs = "ad".equals(cal) ? null : BsDate.format(c, Calendar.getInstance());
-        if (bs != null) {
-            TextView b = Ui.onPhoto(c, Ui.text(c, bs, 24, Ui.MEDIUM, Ui.INK));
-            b.setPadding(0, dp(8), 0, 0);
-            side.addView(b);
-        }
-        if (!"bs".equals(cal) || bs == null) {
-            TextView a = Ui.onPhoto(c, Ui.text(c, Options.digits(c, new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(now)),
-                    bs == null ? 22 : 15, Ui.REGULAR, bs == null ? Ui.INK : Ui.INK_2));
-            a.setPadding(0, dp(7), 0, 0);
-            side.addView(a);
-        }
-        clockRow.addView(side);
+        TextView b = Ui.onPhoto(c, Ui.text(c, bs, 24, Ui.MEDIUM, Ui.INK));
+        b.setVisibility(bs == null ? View.GONE : View.VISIBLE);
+        TextView a = Ui.onPhoto(c, Ui.text(c, Options.digits(c, new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(now)),
+                15, Ui.REGULAR, Ui.INK_2));
+        a.setVisibility(!"bs".equals(cal) || bs == null ? View.VISIBLE : View.GONE);
+        Ui.layoutDates(c, side, greeting, b, a);
+        Ui.arrangeClock(c, clockRow, clock, side);
         page.addView(clockRow);
         page.addView(new View(c), new LinearLayout.LayoutParams(-1, 0, 1));
 
